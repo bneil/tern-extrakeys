@@ -2,8 +2,8 @@
 -- the host and window entries against a mock `tern` table.
 -- Run: python3 tests/embed.py && luau tests/run.luau
 
-local config = require("../extrakeys/lib/config")
-local keys = require("../extrakeys/lib/keys")
+local config = require("../lib/config")
+local keys = require("../lib/keys")
 local sources = require("./_sources")
 
 local passed, failed = 0, 0
@@ -356,7 +356,7 @@ end
 do
 	local panes = { { pane = 1, title = "zsh", program = "zsh", cwd = "/home/u" }, { pane = 9, title = "Extra Keys", program = "" } }
 	local h = make_env(panes)
-	h.load("extrakeys/host.luau")
+	h.load("host.luau")
 	local def = h.blocks.bar
 	eq("block defined", def ~= nil, true)
 	local cx = mock_cx(9, h.toasts)
@@ -461,7 +461,7 @@ do -- target picking, gone target, args, follow
 		{ pane = 9, title = "Extra Keys", program = "" },
 	}
 	local h = make_env(panes)
-	h.load("extrakeys/host.luau")
+	h.load("host.luau")
 	local def = h.blocks.bar
 	local cx = mock_cx(9, h.toasts)
 	local st = def.init(cx, {}, nil)
@@ -506,7 +506,7 @@ do -- config files
 	local h = make_env({ { pane = 1, title = "sh" } }, {
 		["/home/u/.termux/termux.properties"] = "extra-keys = [[ESC, {key: CTRL, popup: {macro: 'CTRL d', display: exit}}]]\n",
 	})
-	h.load("extrakeys/host.luau")
+	h.load("host.luau")
 	local def = h.blocks.bar
 	local cx = mock_cx(9, h.toasts)
 	local st = def.init(cx, {}, nil)
@@ -517,7 +517,7 @@ do -- config files
 	eq("popup macro on modifier key", h.writes[1].text, "\4")
 
 	local bad = make_env({ { pane = 1, title = "sh" } }, { ["/data/extra-keys.json"] = "[[ESC, {key: a, macro: b}]]" })
-	bad.load("extrakeys/host.luau")
+	bad.load("host.luau")
 	local st5 = bad.blocks.bar.init(mock_cx(9, bad.toasts), {}, nil)
 	eq("bad config falls back", #st5.cfg.rows, 2)
 	eq("bad config error kept", st5.err ~= nil and string.find(st5.err, "both key and macro", 1, true) ~= nil, true)
@@ -526,7 +526,7 @@ do -- config files
 		["/data/termux.properties"] = "extra-keys=[[TAB]]",
 		["/home/u/.termux/termux.properties"] = "extra-keys=[[ESC]]",
 	})
-	first.load("extrakeys/host.luau")
+	first.load("host.luau")
 	local st6 = first.blocks.bar.init(mock_cx(9, first.toasts), {}, nil)
 	eq("plugin data config wins", st6.cfg.rows[1][1].key, "TAB")
 end
@@ -585,7 +585,7 @@ do -- window halves
 			table.insert(wtoasts, level .. ": " .. text)
 		end,
 	}
-	h.load("extrakeys/window.luau")
+	h.load("window.luau")
 	handlers.focus({ pane = 1, tab = 1 }, wcx)
 	eq("focus stores terminal", h.kv.focused_target, 1)
 	handlers.focus({ pane = 7, tab = 1 }, wcx)

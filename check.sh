@@ -9,7 +9,7 @@ LUAU_LSP=${LUAU_LSP:-luau-lsp}
 LUAU=${LUAU:-luau}
 DEFS=${TERN_DEFS:-tern.d.luau}
 "$LUAU_LSP" analyze --platform=standard --definitions=@tern="$DEFS" \
-	extrakeys/host.luau extrakeys/window.luau extrakeys/lib/config.luau extrakeys/lib/keys.luau \
+	host.luau window.luau lib/config.luau lib/keys.luau \
 	hello/host.luau hello/window.luau
 python3 tests/embed.py
 "$LUAU" tests/run.luau
