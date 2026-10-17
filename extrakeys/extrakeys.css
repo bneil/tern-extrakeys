@@ -1,0 +1,93 @@
+/* Extra Keys bar. Every rule is scoped to the block's surface so the sheet
+   touches nothing else; colors use Tern's theme variables (--t1…--t4 text,
+   --l1…--l3 layers, --accent / --accent-fill) so light and dark themes follow. */
+
+[data-surface='plugin.extrakeys.bar'] .ek-ctl {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 4px;
+}
+
+[data-surface='plugin.extrakeys.bar'] .ek-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+[data-surface='plugin.extrakeys.bar'] .ek-row {
+	display: flex;
+	flex-direction: row;
+	gap: 3px;
+}
+
+[data-surface='plugin.extrakeys.bar'] .ek-key,
+[data-surface='plugin.extrakeys.bar'] .ek-ctl-btn,
+[data-surface='plugin.extrakeys.bar'] .ek-pick-item {
+	color: var(--t1);
+	background-color: var(--l1);
+	border: 1px solid var(--l2);
+	border-radius: 5px;
+	user-select: none;
+	touch-action: manipulation;
+	text-align: center;
+}
+
+[data-surface='plugin.extrakeys.bar'] .ek-key {
+	flex-grow: 1;
+	flex-basis: 0;
+	min-width: 28px;
+	min-height: 34px;
+	padding: 6px 2px;
+	font-size: 15px;
+}
+
+[data-surface='plugin.extrakeys.bar'] .ek-ctl-btn {
+	padding: 2px 8px;
+	font-size: 12px;
+	color: var(--t3);
+}
+
+[data-surface='plugin.extrakeys.bar'] .ek-key:active,
+[data-surface='plugin.extrakeys.bar'] .ek-ctl-btn:active,
+[data-surface='plugin.extrakeys.bar'] .ek-pick-item:active {
+	background-color: var(--l3);
+}
+
+/* Sticky modifier: armed for the next key */
+[data-surface='plugin.extrakeys.bar'] .ek-key.on,
+[data-surface='plugin.extrakeys.bar'] .ek-ctl-btn.on,
+[data-surface='plugin.extrakeys.bar'] .ek-pick-item.on {
+	color: var(--accent);
+	border-color: var(--accent);
+}
+
+/* Locked modifier: stays on until tapped again */
+[data-surface='plugin.extrakeys.bar'] .ek-key.locked {
+	color: white;
+	background-color: var(--accent-fill);
+	border-color: var(--accent);
+}
+
+/* A key with a popup: a faint underline hints at the ⇅ layer */
+[data-surface='plugin.extrakeys.bar'] .ek-key.has-popup {
+	border-bottom: 2px solid var(--t4);
+}
+
+/* The popup layer is showing */
+[data-surface='plugin.extrakeys.bar'] .ek-grid.layer .ek-key.ek-popup {
+	border-color: var(--accent);
+}
+
+[data-surface='plugin.extrakeys.bar'] .ek-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	margin-bottom: 4px;
+}
+
+[data-surface='plugin.extrakeys.bar'] .ek-pick-item {
+	padding: 6px 8px;
+	text-align: left;
+}

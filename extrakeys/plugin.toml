@@ -1,0 +1,14 @@
+schema = 1
+id = "extrakeys"
+name = "Extra Keys"
+version = "0.1.0"
+description = "A Termux-style extra-keys bar (ESC, CTRL, ALT, TAB, arrows…) that types into a terminal pane."
+icon = "keyboard"
+host = "host.luau"
+window = "window.luau"
+styles = ["extrakeys.css"]
+
+[[blocks]]
+id = "bar"
+title = "Extra Keys"
+icon = "keyboard"
