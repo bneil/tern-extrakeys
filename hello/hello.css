@@ -1,0 +1,11 @@
+[data-surface='plugin.ek-hello.check'] .ek-hello-btn {
+	color: var(--t1);
+	background-color: var(--l1);
+	border: 1px solid var(--l2);
+	border-radius: 5px;
+	padding: 8px 10px;
+	text-align: left;
+}
+[data-surface='plugin.ek-hello.check'] .ek-hello-btn:active {
+	background-color: var(--l3);
+}

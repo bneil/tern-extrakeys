@@ -1,0 +1,14 @@
+schema = 1
+id = "ek-hello"
+name = "Plugin Check"
+version = "0.1.0"
+description = "Shows which plugin halves this Tern client runs; types `echo tern-plugin-ok` into a pane."
+icon = "stethoscope"
+host = "host.luau"
+window = "window.luau"
+styles = ["hello.css"]
+
+[[blocks]]
+id = "check"
+title = "Plugin Check"
+icon = "stethoscope"
