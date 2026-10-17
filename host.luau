@@ -2,7 +2,10 @@
 -- Host half: the `extrakeys.bar` block. A grid of Termux-style extra keys;
 -- each tap writes bytes into a target pane with `tern.pane.write`.
 --
--- Launch args: `extrakeys.bar [PANE_ID]`. Without one the bar uses the last
+-- Launch args: `extrakeys.bar [PANE_ID] [CONFIG_PATH] [follow]`. A path
+-- arg (from "Open with › Extra Keys" on a termux.properties or
+-- extra-keys.json file) is read before the usual config files. Without a
+-- pane id the bar uses the last
 -- target (kv `last_target`), the window half's focus (kv `focused_target`,
 -- when "follow" is on), or asks you to pick a pane.
 
@@ -22,6 +25,7 @@ type State = {
 	cfg: config.Config,
 	source: string,
 	err: string?,
+	config_path: string?,
 	target: number?,
 	follow: boolean,
 	mods: { [string]: ModState },
@@ -60,11 +64,20 @@ local function read_file(path: string): string?
 end
 
 -- Where the layout comes from, first found wins.
-local function config_candidates(): { { path: string, kind: string } }
-	local out: { { path: string, kind: string } } = {
-		{ path = tern.plugin.data .. "/termux.properties", kind = "properties" },
-		{ path = tern.plugin.data .. "/extra-keys.json", kind = "value" },
-	}
+local function kind_of(path: string): string
+	if string.lower(string.sub(path, -11)) == ".properties" then
+		return "properties"
+	end
+	return "value"
+end
+
+local function config_candidates(first: string?): { { path: string, kind: string } }
+	local out: { { path: string, kind: string } } = {}
+	if first then
+		table.insert(out, { path = first, kind = kind_of(first) })
+	end
+	table.insert(out, { path = tern.plugin.data .. "/termux.properties", kind = "properties" })
+	table.insert(out, { path = tern.plugin.data .. "/extra-keys.json", kind = "value" })
 	local home = tern.getenv("HOME")
 	if home and home ~= "" then
 		table.insert(out, { path = home .. "/.termux/termux.properties", kind = "properties" })
@@ -72,8 +85,8 @@ local function config_candidates(): { { path: string, kind: string } }
 	return out
 end
 
-local function load_config(): (config.Config, string, string?)
-	for _, c in config_candidates() do
+local function load_config(first: string?): (config.Config, string, string?)
+	for _, c in config_candidates(first) do
 		local text = read_file(c.path)
 		if text then
 			local ok, res = pcall(function(): config.Config
@@ -387,12 +400,22 @@ local function fresh_mods(): { [string]: ModState }
 end
 
 local function init(cx: BlockCx, args: { string }, saved: any): State
-	local cfg, source, err = load_config()
+	local config_path: string? = nil
+	if type(saved) == "table" and type(saved.config_path) == "string" then
+		config_path = saved.config_path
+	end
+	for _, a in args do
+		if string.find(a, "/", 1, true) then
+			config_path = a
+		end
+	end
+	local cfg, source, err = load_config(config_path)
 	local state: State = {
 		cx = cx,
 		cfg = cfg,
 		source = source,
 		err = err,
+		config_path = config_path,
 		target = nil,
 		follow = false,
 		mods = fresh_mods(),
@@ -421,7 +444,7 @@ local function init(cx: BlockCx, args: { string }, saved: any): State
 		local n = tonumber(a)
 		if a == "follow" then
 			state.follow = true
-		elseif n then
+		elseif n and not string.find(a, "/", 1, true) then
 			state.target = n
 		end
 	end
@@ -480,7 +503,7 @@ local function event(state: State, ev: UiEvent, cx: BlockCx)
 				then "Following the focused pane (works only where the window half runs on this host)."
 				else nil
 		elseif value == "reload" then
-			state.cfg, state.source, state.err = load_config()
+			state.cfg, state.source, state.err = load_config(state.config_path)
 			state.note = "Loaded " .. state.source
 			if state.err then
 				cx:toast("error", "Extra Keys: bad config", state.err)
@@ -527,7 +550,13 @@ local function save(state: State): any
 			locked[name] = true
 		end
 	end
-	return { target = state.target, follow = state.follow, app_cursor = state.app_cursor, locked = locked }
+	return {
+		target = state.target,
+		follow = state.follow,
+		app_cursor = state.app_cursor,
+		locked = locked,
+		config_path = state.config_path,
+	}
 end
 
 local def: BlockDef<State> = {

@@ -546,11 +546,11 @@ do -- hello host block
 	eq("hello toast", #h.toasts, 1)
 end
 
-do -- window halves
-	local h = make_env({})
+-- A fake window: panes with kinds/blocks, focus, new_block that adds a pane.
+local function make_window(h: any, panes: { any }, focused: number?)
 	local handlers: { [string]: any } = {}
 	local commands: { [string]: any } = {}
-	local status_fn: any = nil
+	local status: { any } = {}
 	local t: any = h.tern
 	t.on = function(name: string, fn: any)
 		handlers[name] = fn
@@ -559,51 +559,193 @@ do -- window halves
 		commands[def.id] = def
 	end
 	t.chrome = { status = function(fn: any)
-		status_fn = fn
+		table.insert(status, fn)
 	end }
-	local opened: { any } = {}
-	local ran: { any } = {}
-	local wtoasts: { string } = {}
-	local kinds: { [number]: string } = { [1] = "terminal", [7] = "plugin" }
-	local wcx = {
+	local w = {
+		handlers = handlers,
+		commands = commands,
+		status = status,
+		panes = panes,
+		focused = focused,
+		opened = {} :: { any },
+		ran = {} :: { any },
+		toasts = {} :: { string },
+		actions = {} :: { string },
+		next_id = 100,
+		new_block_result = true,
+	}
+	w.cx = {
 		session = {
 			pane = function(_self: any, id: number)
-				return if kinds[id] then { pane = id, kind = kinds[id], title = "" } else nil
+				for _, p in w.panes do
+					if p.pane == id then
+						return p
+					end
+				end
+				return nil
+			end,
+			panes = function(_self: any)
+				return w.panes
 			end,
 			focused = function(_self: any)
-				return 1
+				return w.focused
 			end,
 		},
 		new_block = function(_self: any, kind: string, args: { string }, how: string, reveal: any)
-			table.insert(opened, { kind = kind, args = args, how = how, reveal = reveal })
-			return 42
+			table.insert(w.opened, { kind = kind, args = args, how = how, reveal = reveal })
+			if not w.new_block_result then
+				return nil
+			end
+			w.next_id += 1
+			table.insert(w.panes, { pane = w.next_id, kind = "plugin", block = kind, title = "Extra Keys" })
+			return w.next_id
 		end,
 		run = function(_self: any, pane: number, text: string)
-			table.insert(ran, { pane = pane, text = text })
+			table.insert(w.ran, { pane = pane, text = text })
+		end,
+		action = function(_self: any, name: string)
+			table.insert(w.actions, name)
 		end,
 		toast = function(_self: any, level: string, text: string, _sub: string?)
-			table.insert(wtoasts, level .. ": " .. text)
+			table.insert(w.toasts, level .. ": " .. text)
 		end,
 	}
-	h.load("window.luau")
-	handlers.focus({ pane = 1, tab = 1 }, wcx)
-	eq("focus stores terminal", h.kv.focused_target, 1)
-	handlers.focus({ pane = 7, tab = 1 }, wcx)
-	eq("focus ignores plugin panes", h.kv.focused_target, 1)
-	commands.open.run(wcx)
-	eq("open kind", opened[1].kind, "extrakeys.bar")
-	eq("open arg is focused pane", opened[1].args[1], "1")
-	eq("open below", opened[1].how, "below")
-	eq("open keeps focus", opened[1].reveal.focus, false)
+	return w
+end
 
+do -- extrakeys window half: focus, open command, status segment, auto-open
+	local h = make_env({})
+	local w = make_window(h, {
+		{ pane = 1, kind = "terminal", title = "zsh" },
+		{ pane = 7, kind = "plugin", block = "other.thing", title = "Other" },
+	}, 1)
+	h.load("window.luau")
+
+	w.handlers.focus({ pane = 1, tab = 1 }, w.cx)
+	eq("focus stores terminal", h.kv.focused_target, 1)
+	w.handlers.focus({ pane = 7, tab = 1 }, w.cx)
+	eq("focus ignores plugin panes", h.kv.focused_target, 1)
+
+	-- status segment: documented StatusSegment shape, click runs the open action
+	eq("one status formatter", #w.status, 1)
+	local segs = w.status[1]({ pane = 1, title = "zsh", program = "zsh", busy = false })
+	eq("segment count", #segs, 1)
+	eq("segment text", segs[1].text, "keys")
+	eq("segment icon", segs[1].icon, "keyboard")
+	eq("segment command is the open action", segs[1].command, "plugin.extrakeys.open")
+	eq("segment action names a registered command", w.commands.open ~= nil, true)
+	local allowed = { text = true, icon = true, tone = true, command = true }
+	local only_documented = true
+	for k in segs[1] do
+		only_documented = only_documented and allowed[k] == true
+	end
+	eq("segment uses only documented fields", only_documented, true)
+
+	-- auto-open on window_start: one bar below the focused shell, aimed at it
+	w.handlers.window_start(w.cx)
+	eq("auto-open opened one", #w.opened, 1)
+	eq("auto-open kind", w.opened[1].kind, "extrakeys.bar")
+	eq("auto-open target arg", w.opened[1].args[1], "1")
+	eq("auto-open below", w.opened[1].how, "below")
+	eq("auto-open keeps focus", w.opened[1].reveal.focus, false)
+	-- repeated window_start (second window on the same session): no duplicate
+	w.handlers.window_start(w.cx)
+	w.handlers.window_start(w.cx)
+	eq("no duplicate bars", #w.opened, 1)
+
+	-- the open command (status click) still opens a bar on demand
+	w.commands.open.run(w.cx)
+	eq("open command opens", #w.opened, 2)
+	eq("open arg is focused pane", w.opened[2].args[1], "1")
+
+	-- focus on a bar: open a fresh bar that asks for a target
+	w.focused = w.panes[#w.panes].pane
+	w.commands.open.run(w.cx)
+	eq("focus on bar -> no target arg", #w.opened[3].args, 0)
+	eq("focus on bar -> default placement", w.opened[3].how, "default")
+	-- no focus at all
+	w.focused = nil
+	w.commands.open.run(w.cx)
+	eq("no focus -> no args", #w.opened[4].args, 0)
+	eq("no focus -> default placement", w.opened[4].how, "default")
+	-- host without the plugin: error toast
+	w.new_block_result = false
+	w.commands.open.run(w.cx)
+	eq("not ready -> toast", string.find(w.toasts[#w.toasts], "isn't ready", 1, true) ~= nil, true)
+end
+
+do -- auto-open detection by title fallback, and disabling
+	local h = make_env({})
+	local w = make_window(h, {
+		{ pane = 1, kind = "terminal", title = "zsh" },
+		{ pane = 4, kind = "plugin", title = "Extra Keys → #1 zsh" },
+	}, 1)
+	h.load("window.luau")
+	w.handlers.window_start(w.cx)
+	eq("existing bar (by title) -> no auto-open", #w.opened, 0)
+
+	local h2 = make_env({}, { ["/data/extrakeys.properties"] = "# settings\nauto-open = false\n" })
+	local w2 = make_window(h2, { { pane = 1, kind = "terminal", title = "zsh" } }, 1)
+	h2.load("window.luau")
+	w2.handlers.window_start(w2.cx)
+	eq("auto-open = false in settings file", #w2.opened, 0)
+	w2.commands["toggle-auto-open"].run(w2.cx)
+	eq("toggle turns it on", h2.kv.auto_open, true)
+	w2.handlers.window_start(w2.cx)
+	eq("kv choice beats file", #w2.opened, 1)
+	w2.commands["toggle-auto-open"].run(w2.cx)
+	eq("toggle turns it off", h2.kv.auto_open, false)
+
+	local h3 = make_env({}, { ["/data/extrakeys.properties"] = "auto-open: yes\n" })
+	local w3 = make_window(h3, { { pane = 1, kind = "terminal", title = "zsh" } }, 1)
+	h3.load("window.luau")
+	w3.handlers.window_start(w3.cx)
+	eq("auto-open yes", #w3.opened, 1)
+
+	-- block kind may be reported plugin-qualified
+	local h4 = make_env({})
+	local w4 = make_window(h4, {
+		{ pane = 1, kind = "terminal", title = "zsh" },
+		{ pane = 5, kind = "plugin", block = "plugin.extrakeys.bar", title = "Keys" },
+	}, 1)
+	h4.load("window.luau")
+	w4.handlers.window_start(w4.cx)
+	eq("plugin-qualified kind counts as a bar", #w4.opened, 0)
+end
+
+do -- host: "Open with" a config file
+	local h = make_env({ { pane = 1, title = "sh" } }, {
+		["/home/u/keys/termux.properties"] = "extra-keys = [[F1, F2]]\n",
+		["/home/u/keys/my.extra-keys.json"] = "[[ESC]]",
+	})
+	h.load("host.luau")
+	local def = h.blocks.bar
+	local cx = mock_cx(9, h.toasts)
+	local st = def.init(cx, { "/home/u/keys/termux.properties" }, nil)
+	eq("open-with properties path", st.source, "/home/u/keys/termux.properties")
+	eq("open-with rows", st.cfg.rows[1][2].key, "F2")
+	eq("path arg not taken as target", st.target, 1)
+	local saved = def.save(st)
+	eq("config_path saved", saved.config_path, "/home/u/keys/termux.properties")
+	local st2 = def.init(cx, {}, saved)
+	eq("config_path restored", st2.cfg.rows[1][1].key, "F1")
+	local st3 = def.init(cx, { "/home/u/keys/my.extra-keys.json" }, nil)
+	eq("open-with json value", st3.cfg.rows[1][1].key, "ESC")
+	click(def, st3, cx, "ui=reload")
+	eq("reload keeps config_path", st3.source, "/home/u/keys/my.extra-keys.json")
+end
+
+do -- hello window half
+	local h = make_env({})
+	local w = make_window(h, { { pane = 1, kind = "terminal", title = "zsh" } }, 1)
 	h.load("hello/window.luau")
-	local segs = status_fn({ pane = 1, title = "", program = "zsh", busy = false })
+	local segs = w.status[1]({ pane = 1, title = "", program = "zsh", busy = false })
 	eq("hello status segment", segs[1].text, "plugin check: window linux")
 	eq("hello segment command", segs[1].command, "plugin.ek-hello.type")
-	commands.type.run(wcx)
-	eq("hello window types", ran[1].text, "echo tern-plugin-ok-window\r")
-	handlers.window_start(wcx)
-	eq("hello window_start toast", #wtoasts >= 2, true)
+	w.commands.type.run(w.cx)
+	eq("hello window types", w.ran[1].text, "echo tern-plugin-ok-window\r")
+	w.handlers.window_start(w.cx)
+	eq("hello window_start toast", string.find(w.toasts[#w.toasts], "window half loaded", 1, true) ~= nil, true)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

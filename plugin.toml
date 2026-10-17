@@ -1,7 +1,7 @@
 schema = 1
 id = "extrakeys"
 name = "Extra Keys"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Termux-style extra-keys bar (ESC, CTRL, ALT, TAB, arrows…) that types into a terminal pane."
 icon = "keyboard"
 host = "host.luau"
@@ -12,3 +12,4 @@ styles = ["extrakeys.css"]
 id = "bar"
 title = "Extra Keys"
 icon = "keyboard"
+files = ["termux.properties", "extra-keys.json", "*.extra-keys.json"]
